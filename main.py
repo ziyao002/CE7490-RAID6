@@ -1,14 +1,13 @@
 import time
-import utils
+
 import raid4
+from utils import *
+from configure import *
 
 
 if __name__ == '__main__':
-    # generate random file and read as "content"
-    FileName = 'data0'
-    DiskNumber = 10
-    DataSize = 1000000
-    utils.GenRndFile(FileName, DataSize)
+    # generate random file
+    GenRndFile(FileName, DataSize)
 
     # RAID4 system
     Raid4 = raid4.RAID4(DiskNumber, FileName, DataSize)
