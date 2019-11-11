@@ -24,7 +24,7 @@ class RAID4:
             CurrentStrList = [ord(s) for s in content] + [0] * (MaxLen - len(content))
             ByteList.append(CurrentStrList)
         # list to np.array
-        ByteAarray = np.array(ByteList, dtype=np.int16)
+        ByteAarray = np.array(ByteList, dtype=np.int8)
         return ByteAarray
 
     def Array2Content(self, OneDArray):
@@ -69,7 +69,7 @@ class RAID4:
         for content in ContentList:
             CurrentStrList = [ord(s) for s in content]
             ByteList.append(CurrentStrList)
-        ByteAarray = np.array(ByteList, dtype=np.int16)
+        ByteAarray = np.array(ByteList, dtype=np.int8)
         return ByteAarray
 
     def write(self):
@@ -87,8 +87,8 @@ class RAID4:
         FlatStrList = [chr(x) for x in FlatList]
         return ''.join(FlatStrList)
 
-    def Datacheck(self, ByteArray):
-        CheckArray = np.bitwise_xor.reduce(ByteArray).reshape(1, -1)
+    def Datacheck(self, ByteNDArray):
+        CheckArray = np.bitwise_xor.reduce(ByteNDArray).reshape(1, -1)
         if np.count_nonzero(CheckArray) != 0:
             raise Exception("RAID4 Check Fails!")
 
