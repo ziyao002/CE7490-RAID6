@@ -2,6 +2,7 @@ import os
 import math
 import random
 import string
+import codecs
 import time
 import numpy as np
 from threading import Thread
@@ -33,7 +34,6 @@ class RAID4:
             mod_j = i // self.bsize // (self.N - 1)     # Block Index
             mod_k = i % self.bsize                      # Data Index
             ContentArray[mod_i][mod_j][mod_k] = ord(content[i])
-            # print("ord(content[i]) = ", mod_i, mod_j, mod_k, ord(content[i]))
         return ContentArray
 
     def Array2Content(self, OneDArray):
@@ -64,7 +64,7 @@ class RAID4:
         while self.DiskLockList[DiskIndex]:
             pass
         self.DiskLockList[DiskIndex] = 1
-        with open(FilePath, 'wt') as fh:
+        with codecs.open(FilePath, 'w', 'utf-8') as fh:
             fh.write(OneDStr)
         # Release Disk
         self.DiskLockList[DiskIndex] = 0
@@ -77,7 +77,7 @@ class RAID4:
 
         # Write Data
         OneDStr = self.Array2Content(OneDArray.reshape(-1, 1))
-        with open(FilePath, 'wt') as fh:
+        with codecs.open(FilePath, 'w', 'utf-8') as fh:
             fh.write(OneDStr)
 
         # Release Disk
@@ -88,14 +88,14 @@ class RAID4:
         while self.DiskLockList[DiskIndex]:
             pass
         self.DiskLockList[DiskIndex] = 1
-        with open(FilePath, 'rt') as fh:
+        with codecs.open(FilePath, 'r', 'utf-8') as fh:
             # Release Disk
             content = fh.read()
             self.DiskLockList[DiskIndex] = 0
             return content
 
     def SequentialWrite(self):
-        with open(self.infname, 'rt') as fh:
+        with codecs.open(self.infname, 'r', 'utf-8') as fh:
             content = fh.read()
         ByteNDArray = self.Content2ArrayBlock(content)
         WriteArray = self.GenWriteArray(ByteNDArray)
@@ -167,7 +167,6 @@ class RAID4:
                 ContentStrList = ContentList[i * self.MaxBlockIndex + j]
                 BlockByteList.append([ord(s) for s in ContentStrList])
             DiskByteList.append(BlockByteList)
-        # print("DiskByteList = ", DiskByteList)
         ByteNDArray = np.array(DiskByteList, dtype=np.int8)
         return ByteNDArray
 
@@ -183,12 +182,7 @@ class RAID4:
         return ''.join(FlatStrList)
 
     def Datacheck(self, ByteNDArray):
-        # CheckArray = np.bitwise_xor.reduce(ByteNDArray).reshape(1, -1)
         CheckArray = np.bitwise_xor.reduce(ByteNDArray)
-        # print("ByteNDArray = ", ByteNDArray)
-        # print("ByteNDArray.shape = ", ByteNDArray.shape)
-        # print("CheckArray = ", CheckArray)
-        # print("CheckArray.shape = ", CheckArray.shape)
         if np.count_nonzero(CheckArray) != 0:
             raise Exception("RAID4 Check Fails!")
 
