@@ -9,3 +9,4 @@ def GenRndFile(fname, size):
     fpath = os.path.join('', fname)
     with codecs.open(fpath, 'w', 'utf-8') as fh:
         fh.write(content)
+

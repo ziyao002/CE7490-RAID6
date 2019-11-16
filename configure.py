@@ -1,11 +1,10 @@
 TestFileName = 'TestData'
 
 DiskNumber = 10
-DataSize = 1000
-BlockSize = 16
+DataSize = 100
+BlockSize = 4
 
 ParityDiskBlockFlag = 0
 ParityDiskIndex_RAID4 = DiskNumber - 1
 
-CountNum = 0
 

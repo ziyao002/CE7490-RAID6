@@ -12,15 +12,14 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from configure import *
 
 
-class RAID4:
+class RAID5:
     def __init__(self, InputFileName, DiskNumber, DataSize, BlockSize):
         self.N = DiskNumber
         self.infname = InputFileName
         self.dsize = DataSize
         self.bsize = BlockSize
-        self.RndWriteDoneFlag = 0
         self.MaxBlockIndex = int(math.ceil(math.ceil(DataSize / (DiskNumber - 1)) / BlockSize))
-        self.DiskLockList = [0] * self.N
+        self.DiskLockList = [0] * DiskNumber
         self.ParityLockFlag = 0
         self.StripeLockList = []
         self.CountNum = 0
@@ -47,8 +46,9 @@ class RAID4:
         return np.bitwise_xor.reduce(ContentArray).reshape(1, ContentArray.shape[1], ContentArray.shape[2])
 
     def SwapParity(self, WriteArray):
-        SwapWeiteArray = WriteArray
-        return SwapWeiteArray
+        for i in range(self.MaxBlockIndex):
+            WriteArray[[(self.N - 1 - i) % self.N, ParityDiskIndex_RAID4], i, :] = WriteArray[[ParityDiskIndex_RAID4, (self.N - 1 - i) % self.N], i, :]
+        return WriteArray
 
     def GenWriteArray(self, ContentArray):
         parity = self.GenXor(ContentArray)
@@ -57,13 +57,13 @@ class RAID4:
         return WriteArray
 
     def GetPath(self, DiskIndex, BlockIndex):
-        DiskPath = os.path.join('RAID4', 'Disk' + str(DiskIndex))
+        DiskPath = os.path.join('RAID5', 'Disk' + str(DiskIndex))
         if not os.path.isdir(DiskPath):
             os.makedirs(DiskPath)
         return os.path.join(DiskPath, 'Block' + str(BlockIndex))
 
     def GetParityDiskIndex(self, DiskIndex, BlockIndex):
-        return ParityDiskIndex_RAID4
+        return (self.N - 1 - BlockIndex) % self.N
 
     def Write2Disk(self, FilePath, OneDStr, DiskIndex):
         # Lock Disk
@@ -148,7 +148,7 @@ class RAID4:
         self.StripeLockList[BlockIndex] = 0
 
     def RandomWrite(self, DiskIndexList, BlockIndexList, NewDataArray):
-        for i in range(len(DiskIndexList)):
+        for i in range(self.MaxBlockIndex * self.N):
             t = Thread(target=self.RndWrite2Disk, args=(DiskIndexList[i], BlockIndexList[i], NewDataArray[i]))
             t.start()
         while any(self.StripeLockList):
@@ -187,7 +187,7 @@ class RAID4:
     def DataCheck(self, ByteNDArray):
         CheckArray = np.bitwise_xor.reduce(ByteNDArray)
         if np.count_nonzero(CheckArray) != 0:
-            raise Exception("RAID4 Check Fails!")
+            raise Exception("RAID5 Check Fails!")
 
     def rebuild(self, ErrorDiskIndex):
         ByteArray = self.ParallelRead()
@@ -197,9 +197,7 @@ class RAID4:
             self.SeqWrite2Disk(self.GetPath(ErrorDiskIndex, BlockIndex), RebuildArray[BlockIndex], ErrorDiskIndex)
 
     def GenRndIndexData(self):
-        DiskIndexList = list(np.random.randint(self.N - 1, size=self.MaxBlockIndex * self.N))
-        BlockIndexList = list(np.random.randint(self.MaxBlockIndex - 1, size=self.MaxBlockIndex * self.N))
-        NewDataArray = [''.join([random.choice(string.ascii_letters) for i in range(self.bsize)]) for j in
-                        range(self.MaxBlockIndex * self.N)]
+        DiskIndexList = list(np.random.randint(self.N, size=self.MaxBlockIndex * self.N))
+        BlockIndexList = [(random.randint(0, self.MaxBlockIndex // self.N) * self.N + self.N - 2 - x) % self.MaxBlockIndex for x in DiskIndexList]
+        NewDataArray = [''.join([random.choice(string.ascii_letters) for i in range(self.bsize)]) for j in range(self.MaxBlockIndex * self.N)]
         return [DiskIndexList, BlockIndexList, NewDataArray]
-
