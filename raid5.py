@@ -47,7 +47,9 @@ class RAID5:
 
     def SwapParity(self, WriteArray):
         for i in range(self.MaxBlockIndex):
-            WriteArray[[(self.N - 1 - i) % self.N, ParityDiskIndex_RAID4], i, :] = WriteArray[[ParityDiskIndex_RAID4, (self.N - 1 - i) % self.N], i, :]
+            POldIndex = ParityDiskIndex_RAID4
+            PnewIndex = (self.N - 1 - i) % self.N
+            WriteArray[[PnewIndex, POldIndex], i, :] = WriteArray[[POldIndex, PnewIndex], i, :]
         return WriteArray
 
     def GenWriteArray(self, ContentArray):
