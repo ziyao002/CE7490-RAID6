@@ -219,8 +219,8 @@ class RAID6:
         ByteArrayForRebuild = np.delete(ByteArray, [ErrorDiskIndex0, ErrorDiskIndex1], axis=0)
         RebuildArray = self.RAID6rebuild(ByteArrayForRebuild)
         for BlockIndex in range(self.MaxBlockIndex):
-            self.SeqWrite2Disk(self.GetPath(ErrorDiskIndex0, BlockIndex), RebuildArray[BlockIndex], ErrorDiskIndex0)
-            self.SeqWrite2Disk(self.GetPath(ErrorDiskIndex1, BlockIndex), RebuildArray[BlockIndex], ErrorDiskIndex1)
+            self.SeqWrite2Disk(self.GetPath(ErrorDiskIndex0, BlockIndex), RebuildArray[0][BlockIndex], ErrorDiskIndex0)
+            self.SeqWrite2Disk(self.GetPath(ErrorDiskIndex1, BlockIndex), RebuildArray[1][BlockIndex], ErrorDiskIndex1)
 
     def GenRndIndexData(self):
         DiskIndexList = list(np.random.randint(self.N, size=self.MaxBlockIndex * self.N))
