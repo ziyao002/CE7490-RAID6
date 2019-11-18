@@ -211,12 +211,16 @@ class RAID6:
         if np.count_nonzero(CheckArray) != 0:
             raise Exception("RAID6 Check Fails!")
 
-    def rebuild(self, ErrorDiskIndex):
+    def RAID6rebuild(self, ByteArrayForRebuild):
+        return ByteArrayForRebuild[0:2]
+
+    def rebuild(self, ErrorDiskIndex0, ErrorDiskIndex1):
         ByteArray = self.ParallelRead()
-        ByteArrayForRebuild = np.delete(ByteArray, ErrorDiskIndex, axis=0)
-        RebuildArray = np.bitwise_xor.reduce(ByteArrayForRebuild)
+        ByteArrayForRebuild = np.delete(ByteArray, [ErrorDiskIndex0, ErrorDiskIndex1], axis=0)
+        RebuildArray = self.RAID6rebuild(ByteArrayForRebuild)
         for BlockIndex in range(self.MaxBlockIndex):
-            self.SeqWrite2Disk(self.GetPath(ErrorDiskIndex, BlockIndex), RebuildArray[BlockIndex], ErrorDiskIndex)
+            self.SeqWrite2Disk(self.GetPath(ErrorDiskIndex0, BlockIndex), RebuildArray[BlockIndex], ErrorDiskIndex0)
+            self.SeqWrite2Disk(self.GetPath(ErrorDiskIndex1, BlockIndex), RebuildArray[BlockIndex], ErrorDiskIndex1)
 
     def GenRndIndexData(self):
         DiskIndexList = list(np.random.randint(self.N, size=self.MaxBlockIndex * self.N))
