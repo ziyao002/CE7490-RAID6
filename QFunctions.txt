@@ -11,3 +11,11 @@ OldDataByte:	Type = list, len = BlockSize, Datatype = int
 OldPByte:	Type = list, len = BlockSize, Datatype = int
 OldQByte:	Type = list, len = BlockSize, Datatype = int
 NewQByte:	Type = list, len = BlockSize, Datatype = int
+
+3. RAID6rebuild(ByteArrayForRebuild)
+	return RebuildArray
+
+ByteArrayForRebuild:	Type = np.array, shape = (DiskNumber-2, MaxStripeIndex, BlockSize), Datatype = np.int8
+RebuildArray: 		Type = np.array, shape = (2, MaxStripeIndex, BlockSize), Datatype = np.int8
+
+4. DataCheck
