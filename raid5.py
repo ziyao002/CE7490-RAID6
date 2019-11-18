@@ -18,7 +18,7 @@ class RAID5:
         self.infname = InputFileName
         self.dsize = DataSize
         self.bsize = BlockSize
-        self.MaxBlockIndex = int(math.ceil(math.ceil(DataSize / (DiskNumber - 1)) / BlockSize))
+        self.MaxStripeIndex = int(math.ceil(math.ceil(DataSize / (DiskNumber - 1)) / BlockSize))
         self.DiskLockList = [0] * DiskNumber
         self.ParityLockFlag = 0
         self.StripeLockList = []
@@ -26,8 +26,8 @@ class RAID5:
 
     def Content2ArrayBlock(self, content):
         # return ContentArray(DiskIndex, BlockIndex, DataIndex)
-        self.StripeLockList = [0] * self.MaxBlockIndex
-        ContentArray = np.zeros((self.N - 1, self.MaxBlockIndex, self.bsize), dtype=np.int8)
+        self.StripeLockList = [0] * self.MaxStripeIndex
+        ContentArray = np.zeros((self.N - 1, self.MaxStripeIndex, self.bsize), dtype=np.int8)
         # allocate the data to the block in N-1 disks
         for i in range(len(content)):
             mod_i = i // self.bsize % (self.N - 1)      # Disk Index
@@ -46,7 +46,7 @@ class RAID5:
         return np.bitwise_xor.reduce(ContentArray).reshape(1, ContentArray.shape[1], ContentArray.shape[2])
 
     def SwapParity(self, WriteArray):
-        for i in range(self.MaxBlockIndex):
+        for i in range(self.MaxStripeIndex):
             POldIndex = ParityDiskIndex_RAID4
             PnewIndex = (self.N - 1 - i) % self.N
             WriteArray[[PnewIndex, POldIndex], i, :] = WriteArray[[POldIndex, PnewIndex], i, :]
@@ -110,13 +110,13 @@ class RAID5:
 
         FilePathList = []
         for DiskIndex in range(self.N):
-            for BlockIndex in range(self.MaxBlockIndex):
+            for BlockIndex in range(self.MaxStripeIndex):
                 FilePathList.append(self.GetPath(DiskIndex, BlockIndex))
 
         for DiskIndex in range(self.N):
-            for BlockIndex in range(self.MaxBlockIndex):
+            for BlockIndex in range(self.MaxStripeIndex):
                 t = Thread(target=self.SeqWrite2Disk, args=(
-                FilePathList[DiskIndex * self.MaxBlockIndex + BlockIndex], WriteArray[DiskIndex][BlockIndex], DiskIndex))
+                FilePathList[DiskIndex * self.MaxStripeIndex + BlockIndex], WriteArray[DiskIndex][BlockIndex], DiskIndex))
                 t.start()
                 t.join()
 
@@ -150,7 +150,7 @@ class RAID5:
         self.StripeLockList[BlockIndex] = 0
 
     def RandomWrite(self, DiskIndexList, BlockIndexList, NewDataArray):
-        for i in range(self.MaxBlockIndex * self.N):
+        for i in range(self.MaxStripeIndex * self.N):
             t = Thread(target=self.RndWrite2Disk, args=(DiskIndexList[i], BlockIndexList[i], NewDataArray[i]))
             t.start()
         while any(self.StripeLockList):
@@ -160,16 +160,16 @@ class RAID5:
     def ParallelRead(self):
         FilePathList = []
         for DiskIndex in range(self.N):
-            for BlockIndex in range(self.MaxBlockIndex):
+            for BlockIndex in range(self.MaxStripeIndex):
                 FilePathList.append(self.GetPath(DiskIndex, BlockIndex))
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.N) as executor:
-            ContentList = list(executor.map(self.ReadFromDisk, FilePathList, list(range(self.N)) * self.MaxBlockIndex))
+            ContentList = list(executor.map(self.ReadFromDisk, FilePathList, list(range(self.N)) * self.MaxStripeIndex))
 
         DiskByteList = []
         for i in range(self.N):
             BlockByteList = []
-            for j in range(self.MaxBlockIndex):
-                ContentStrList = ContentList[i * self.MaxBlockIndex + j]
+            for j in range(self.MaxStripeIndex):
+                ContentStrList = ContentList[i * self.MaxStripeIndex + j]
                 BlockByteList.append([ord(s) for s in ContentStrList])
             DiskByteList.append(BlockByteList)
         ByteNDArray = np.array(DiskByteList, dtype=np.int8)
@@ -180,7 +180,7 @@ class RAID5:
         self.DataCheck(ByteArray)
         DataArray = ByteArray[:-1]
         FlatList = []
-        for i in range(self.MaxBlockIndex):
+        for i in range(self.MaxStripeIndex):
             DataStripList = (DataArray[:, i].reshape(1, -1)).tolist()
             FlatList = FlatList + DataStripList[0]
         FlatStrList = [chr(x) for x in FlatList]
@@ -195,11 +195,11 @@ class RAID5:
         ByteArray = self.ParallelRead()
         ByteArrayForRebuild = np.delete(ByteArray, ErrorDiskIndex, axis=0)
         RebuildArray = np.bitwise_xor.reduce(ByteArrayForRebuild)
-        for BlockIndex in range(self.MaxBlockIndex):
+        for BlockIndex in range(self.MaxStripeIndex):
             self.SeqWrite2Disk(self.GetPath(ErrorDiskIndex, BlockIndex), RebuildArray[BlockIndex], ErrorDiskIndex)
 
     def GenRndIndexData(self):
-        DiskIndexList = list(np.random.randint(self.N, size=self.MaxBlockIndex * self.N))
-        BlockIndexList = [(random.randint(0, self.MaxBlockIndex // self.N) * self.N + self.N - 2 - x) % self.MaxBlockIndex for x in DiskIndexList]
-        NewDataArray = [''.join([random.choice(string.ascii_letters) for i in range(self.bsize)]) for j in range(self.MaxBlockIndex * self.N)]
+        DiskIndexList = list(np.random.randint(self.N, size=self.MaxStripeIndex * self.N))
+        BlockIndexList = [(random.randint(0, self.MaxStripeIndex // self.N) * self.N + self.N - 2 - x) % self.MaxStripeIndex for x in DiskIndexList]
+        NewDataArray = [''.join([random.choice(string.ascii_letters) for i in range(self.bsize)]) for j in range(self.MaxStripeIndex * self.N)]
         return [DiskIndexList, BlockIndexList, NewDataArray]
