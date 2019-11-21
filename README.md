@@ -1,5 +1,5 @@
 # CE7490-RAID6
-A proof of concept of thread-based RAID6 implementation, supporting:
+A proof of concept of thread-based RAID4/5/6 implementation, supporting:
 
 1. sequential write
 2. random write
