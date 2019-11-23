@@ -9,6 +9,30 @@ if __name__ == '__main__':
 
     # generate random file
     GenRndFile(TestFileName, DataSize)
+    ### test Raid6 system
+    Raid6 = raid6.RAID6(TestFileName, DiskNumber, DataSize, BlockSize)
+    RndIndexDataForRaid6 = Raid6.GenRndIndexData()
+
+    # test for RAID6 sequential writing
+    SeqWriteStartTime = time.time()
+    Raid6.SequentialWrite()
+    SeqWriteStopTime = time.time()
+    print("RAID6 sequential writing duration = ", SeqWriteStopTime - SeqWriteStartTime, "second")
+    # test for RAID6 random writing
+    # RndReadStartTime = time.time()
+    # Raid6.RandomWrite(RndIndexDataForRaid6[0], RndIndexDataForRaid6[1], RndIndexDataForRaid6[2])
+    # RndReadStopTime = time.time()
+    # print("RAID6 random writing duration = ", RndReadStopTime - RndReadStartTime, "second")
+    # test for RAID6 reading
+    ReadStartTime = time.time()
+    Raid6.read()
+    ReadStopTime = time.time()
+    print("RAID46reading duration = ", ReadStopTime - ReadStartTime, "second")
+
+    # Recover for 2 Data Disks
+    ErrorDiskList = [5,6]
+    Raid6.RAID6rebuild(ErrorDiskList)
+
 
     Raid4 = raid4.RAID4(TestFileName, DiskNumber, DataSize, BlockSize)
     Raid5 = raid5.RAID5(TestFileName, DiskNumber, DataSize, BlockSize)
