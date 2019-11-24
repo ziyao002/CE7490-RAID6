@@ -59,14 +59,18 @@ class RAID6:
             case 3: P Q D D D D
             case 4: Q D D D D P
         '''
+        # need to consider the case the DiskIndex is swapped with P or Q disk drive during writing
+        POldIndex = ParityDiskIndex_RAID6
+        QOldIndex = ParityDiskIndex_RAID4
         # case 1
         QCoef_index = DiskIndex
         # case 2/3:
-        if DiskIndex > PDiskIndex and DiskIndex > QDiskIndex:
-            QCoef_index = DiskIndex - 2
+        if DiskIndex == POldIndex:
+            QCoef_index = PDiskIndex
         # case 4:
-        if DiskIndex < PDiskIndex and DiskIndex > QDiskIndex:
-            QCoef_index = DiskIndex - 1
+        if DiskIndex == QOldIndex:
+            QCoef_index = QDiskIndex
+        # print("QCoef_index = ",QCoef_index)
         #Q_new = Q_old XOR (Dn_new*gn) XOR (Dn_old*gn)
         NewQByte = [np.bitwise_xor(np.bitwise_xor(self.F.Multiply(self.Q_coef[QCoef_index],NewDataByte[i]),self.F.Multiply(self.Q_coef[QCoef_index],OldDataByte[i])), OldQByte[i]) for i in range(self.bsize)]
         return NewQByte
