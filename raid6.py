@@ -51,7 +51,7 @@ class RAID6:
     def GenXor(self, ContentArray):
         return np.bitwise_xor.reduce(ContentArray).reshape(1, ContentArray.shape[1], ContentArray.shape[2])
 
-    def GetQByte(self, OldDataByte, NewDataByte, OldQByte, DiskIndex, PDiskIndex, QDiskIndex):
+    def GetQByte(self, OldDataByte, NewDataByte, OldQByte, DiskIndex, BlockIndex, PDiskIndex, QDiskIndex):
         '''
             # obtain Qcoef_index
             case 1: D D D D P Q
@@ -62,16 +62,31 @@ class RAID6:
         # need to consider the case the DiskIndex is swapped with P or Q disk drive during writing
         POldIndex = ParityDiskIndex_RAID6
         QOldIndex = ParityDiskIndex_RAID4
+
         # case 1
         QCoef_index = DiskIndex
         # case 2/3:
-        if DiskIndex == POldIndex:
-            QCoef_index = PDiskIndex
-        # case 4:
-        if DiskIndex == QOldIndex:
-            QCoef_index = QDiskIndex
+        # if DiskIndex == POldIndex:
+        #     QCoef_index = PDiskIndex
+        # # case 4:
+        # if DiskIndex == QOldIndex and BlockIndex%self.N == 1:
+        #     QCoef_index = PDiskIndex
+        # else:
+        #     QCoef_index = QDiskIndex
         # print("QCoef_index = ",QCoef_index)
-        #Q_new = Q_old XOR (Dn_new*gn) XOR (Dn_old*gn)
+        # Q_new = Q_old XOR (Dn_new*gn) XOR (Dn_old*gn)
+
+        # PIndex = ((self.N - 1 - BlockIndex) % self.N - 1) % self.N
+        # QIndex = (self.N - 1 - BlockIndex) % self.N
+        #
+        # if DiskIndex < PIndex and PIndex < QIndex:
+        #     QCoef_index = DiskIndex
+        # elif DiskIndex < PIndex and QIndex < PIndex:
+        #     QCoef_index = DiskIndex - 1
+        # else:
+        #     QCoef_index = DiskIndex - 2
+
+        print("DiskIndex ", DiskIndex, "PDiskIndex ", PDiskIndex, "QDiskIndex ", QDiskIndex, "BlockIndex ",BlockIndex)
         NewQByte = [np.bitwise_xor(np.bitwise_xor(self.F.Multiply(self.Q_coef[QCoef_index],NewDataByte[i]),self.F.Multiply(self.Q_coef[QCoef_index],OldDataByte[i])), OldQByte[i]) for i in range(self.bsize)]
         return NewQByte
 
@@ -153,9 +168,9 @@ class RAID6:
         PArray = self.GenXor(ContentArray)
         QArray = self.GetQArray(ContentArray)
         ConcArray = np.concatenate([ContentArray, PArray, QArray])
-        print("ConcArray = ",ConcArray[:,2,:])
+        # print("ConcArray = ",ConcArray[:,2,:])
         WriteArray = self.SwapParity(ConcArray)
-        print("WriteArray = ",WriteArray[:,2,:])   
+        # print("WriteArray = ",WriteArray[:,2,:])
         #ReturnWriteArray = self.RecoverParity(WriteArray)
         #print("ReturnWriteArray = ",ReturnWriteArray)   
         return WriteArray
@@ -253,7 +268,7 @@ class RAID6:
         #debug print("OldDataByte: {}\n NewDataByte: {}\n OldPByte: {} \n OldQByte: {} \n".format(len(OldDataByte),len(NewDataByte),len(OldPByte),len(OldQByte)))
         NewPByte = np.bitwise_xor(np.bitwise_xor(NewDataByte, OldDataByte), OldPByte)
         NewPStr = ''.join([chr(x) for x in NewPByte])
-        NewQByte = self.GetQByte(OldDataByte, NewDataByte, OldQByte, DiskIndex, PDiskIndex, QDiskIndex)
+        NewQByte = self.GetQByte(OldDataByte, NewDataByte, OldQByte, DiskIndex, BlockIndex, PDiskIndex, QDiskIndex)
         NewQStr = ''.join([chr(x) for x in NewQByte])
 
         # Three write
@@ -319,7 +334,7 @@ class RAID6:
     def RAID6rebuild(self, ErrorDiskList):
         # array written to file
         ByteArray = self.ParallelRead()
-        print("error disk content: ",ByteArray[ErrorDiskList])
+        # print("error disk content: ",ByteArray[ErrorDiskList])
         # P, Q at last 2 disks
         # RecoverNDArray = self.RecoverParity(ByteArray)
         RebuildArray = np.zeros((2, self.MaxStripeIndex, self.bsize), dtype=np.uint8)
@@ -351,7 +366,7 @@ class RAID6:
                 QArray = self.GetQArray_withcoef(RecoveredStrip[:-2],self.Q_coef)
                 RebuildArray[0][i] = PArray.reshape(self.bsize)
                 RebuildArray[1][i] = QArray.reshape(self.bsize)
-                print("i is ",i,"RebuildArray[0][i]",RebuildArray[0][i],"RebuildArray[1][i]",RebuildArray[1][i])
+                # print("i is ",i,"RebuildArray[0][i]",RebuildArray[0][i],"RebuildArray[1][i]",RebuildArray[1][i])
             # case 2: Single data drive and Q drive
             if RebuildStripeArray[i][0] == 0 and RebuildStripeArray[i][1] == 2:
                 DataStrip = ByteArray[:,i,:].reshape(self.N,1,self.bsize)
@@ -365,7 +380,7 @@ class RAID6:
                 New_QArray = self.GetQArray_withcoef(RecoveredStrip[:-2],self.Q_coef)
                 RebuildArray[0][i] = New_DArray.reshape(self.bsize)
                 RebuildArray[1][i] = New_QArray.reshape(self.bsize)
-                print("i is ",i,"RebuildArray[0][i]",RebuildArray[0][i],"RebuildArray[1][i]",RebuildArray[1][i])
+                # print("i is ",i,"RebuildArray[0][i]",RebuildArray[0][i],"RebuildArray[1][i]",RebuildArray[1][i])
             # case 3: Single data drive and P drive    
             if RebuildStripeArray[i][0] == 0 and RebuildStripeArray[i][1] == 1:  
                 DataStrip = ByteArray[:,i,:].reshape(self.N,1,self.bsize)
@@ -383,7 +398,7 @@ class RAID6:
                 New_PArray = self.GenXor(RecoveredStrip[:-2]).reshape(1,self.bsize)
                 RebuildArray[0][i] = New_DArray
                 RebuildArray[1][i] = New_PArray 
-                print("i is ",i,"RebuildArray[0][i]",RebuildArray[0][i],"RebuildArray[1][i]",RebuildArray[1][i])
+                # print("i is ",i,"RebuildArray[0][i]",RebuildArray[0][i],"RebuildArray[1][i]",RebuildArray[1][i])
             # case 4: 2 data array failed              
             if RebuildStripeArray[i][0] == 0 and RebuildStripeArray[i][1] == 0:  
                 # print("i is ",i)
@@ -432,7 +447,7 @@ class RAID6:
                 New_D2Array = np.bitwise_xor(New_D1Array,P_P_prime_XOR)
                 RebuildArray[0][i] = New_D1Array
                 RebuildArray[1][i] = New_D2Array 
-                print("i is ",i,"RebuildArray[0][i]",RebuildArray[0][i],"RebuildArray[1][i]",RebuildArray[1][i])
+                # print("i is ",i,"RebuildArray[0][i]",RebuildArray[0][i],"RebuildArray[1][i]",RebuildArray[1][i])
         # re build array
         # print(RebuildArray)
         for strip in range(self.MaxStripeIndex):
@@ -441,14 +456,25 @@ class RAID6:
 
     def rebuild(self, ErrorDiskList):
         ByteArray = self.ParallelRead()
-        ByteArrayForRebuild = np.delete(ByteArray, [ErrorDiskIndex0, ErrorDiskIndex1], axis=0)
+        ByteArrayForRebuild = np.delete(ByteArray, [ErrorDiskList[0], ErrorDiskList[1]], axis=0)
         RebuildArray = self.RAID6rebuild(ByteArrayForRebuild)
         for BlockIndex in range(self.MaxStripeIndex):
-            self.SeqWrite2Disk(self.GetPath(ErrorDiskIndex0, BlockIndex), RebuildArray[0][BlockIndex], ErrorDiskIndex0)
-            self.SeqWrite2Disk(self.GetPath(ErrorDiskIndex1, BlockIndex), RebuildArray[1][BlockIndex], ErrorDiskIndex1)
+            self.SeqWrite2Disk(self.GetPath(ErrorDiskList[0], BlockIndex), RebuildArray[0][BlockIndex], ErrorDiskList[0])
+            self.SeqWrite2Disk(self.GetPath(ErrorDiskList[1], BlockIndex), RebuildArray[1][BlockIndex], ErrorDiskList[1])
 
     def GenRndIndexData(self):
-        DiskIndexList = list(np.random.randint(self.N, size=self.MaxStripeIndex * self.N))
-        BlockIndexList = [(random.randint(0, self.MaxStripeIndex // self.N) * self.N + self.N - 3 - x) % self.MaxStripeIndex for x in DiskIndexList]
+        StripeIndexList = list(np.random.randint(self.MaxStripeIndex, size=self.MaxStripeIndex * self.N))
+
+        DiskIndexList = []
+        for x in StripeIndexList:
+            PIndex = ((self.N - 1 - x) % self.N - 1) % self.N
+            QIndex = (self.N - 1 - x) % self.N
+            DiskIndex = np.random.randint(0, self.N - 2)
+            while DiskIndex == PIndex or DiskIndex == QIndex:
+                DiskIndex = np.random.randint(0, self.N - 2)
+            DiskIndexList.append(DiskIndex)
+        print(StripeIndexList)
+        print(DiskIndexList)
+
         NewDataArray = [''.join([random.choice(string.ascii_letters) for i in range(self.bsize)]) for j in range(self.MaxStripeIndex * self.N)]
-        return [DiskIndexList, BlockIndexList, NewDataArray]
+        return [DiskIndexList, StripeIndexList, NewDataArray]
