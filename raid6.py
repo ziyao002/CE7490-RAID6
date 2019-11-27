@@ -63,30 +63,24 @@ class RAID6:
         POldIndex = ParityDiskIndex_RAID6
         QOldIndex = ParityDiskIndex_RAID4
 
-        # case 1
-        QCoef_index = DiskIndex
-        # case 2/3:
-        # if DiskIndex == POldIndex:
-        #     QCoef_index = PDiskIndex
-        # # case 4:
-        # if DiskIndex == QOldIndex and BlockIndex%self.N == 1:
-        #     QCoef_index = PDiskIndex
-        # else:
-        #     QCoef_index = QDiskIndex
-        # print("QCoef_index = ",QCoef_index)
-        # Q_new = Q_old XOR (Dn_new*gn) XOR (Dn_old*gn)
+        QCoef_index = int()
+        # get Qcoef
+        # if disk detect at Old P disk
+        if DiskIndex == POldIndex:
+            if BlockIndex%self.N == self.N - 1:
+                QCoef_index = QDiskIndex
+            else:
+                QCoef_index = PDiskIndex
+        # if disk detect at old Q disk
+        elif DiskIndex == QOldIndex:
+            if BlockIndex%self.N == 1:
+                QCoef_index = PDiskIndex
+            else:
+                QCoef_index = QDiskIndex
+        else:
+            QCoef_index = DiskIndex
 
-        # PIndex = ((self.N - 1 - BlockIndex) % self.N - 1) % self.N
-        # QIndex = (self.N - 1 - BlockIndex) % self.N
-        #
-        # if DiskIndex < PIndex and PIndex < QIndex:
-        #     QCoef_index = DiskIndex
-        # elif DiskIndex < PIndex and QIndex < PIndex:
-        #     QCoef_index = DiskIndex - 1
-        # else:
-        #     QCoef_index = DiskIndex - 2
-
-        print("DiskIndex ", DiskIndex, "PDiskIndex ", PDiskIndex, "QDiskIndex ", QDiskIndex, "BlockIndex ",BlockIndex)
+        # print("QCoef_index = ",QCoef_index, "DiskIndex ", DiskIndex, "PDiskIndex ", PDiskIndex, "QDiskIndex ", QDiskIndex, "stripe ",BlockIndex)
         NewQByte = [np.bitwise_xor(np.bitwise_xor(self.F.Multiply(self.Q_coef[QCoef_index],NewDataByte[i]),self.F.Multiply(self.Q_coef[QCoef_index],OldDataByte[i])), OldQByte[i]) for i in range(self.bsize)]
         return NewQByte
 
@@ -116,10 +110,18 @@ class RAID6:
             PnewIndex = ((self.N - 1 - i) % self.N - 1) % self.N
             QOldIndex = ParityDiskIndex_RAID4
             QnewIndex = (self.N - 1 - i) % self.N
-            # swap P
-            WriteArray[[PnewIndex, POldIndex], i, :] = WriteArray[[POldIndex, PnewIndex], i, :]
-            # swap Q
-            WriteArray[[QnewIndex, QOldIndex], i, :] = WriteArray[[QOldIndex, QnewIndex], i, :] 
+            # DDDDPQ -> DDDDQP -> QDDDDP
+            if i % self.N == self.N - 1:
+                # swap P
+                WriteArray[[PnewIndex, POldIndex], i, :] = WriteArray[[POldIndex, PnewIndex], i, :]
+                # swap Q
+                WriteArray[[QnewIndex, POldIndex], i, :] = WriteArray[[POldIndex, QnewIndex], i, :]
+            # DDDDPQ -> DDDPDQ -> DDDPQD
+            else:
+                # swap P
+                WriteArray[[PnewIndex, POldIndex], i, :] = WriteArray[[POldIndex, PnewIndex], i, :]
+                # swap Q
+                WriteArray[[QnewIndex, QOldIndex], i, :] = WriteArray[[QOldIndex, QnewIndex], i, :]
         return WriteArray
 
     def RecoverParity(self, WriteArray):
@@ -134,6 +136,12 @@ class RAID6:
                 WriteArray[[PnewIndex, QOldIndex], i, :] = WriteArray[[QOldIndex, PnewIndex], i, :]
                 # swap P - Q
                 WriteArray[[POldIndex, QOldIndex], i, :] = WriteArray[[QOldIndex, POldIndex], i, :] 
+            #QDDDDP
+            elif i % self.N == self.N - 1:
+                # swap P and D
+                WriteArray[[POldIndex, QOldIndex], i, :] = WriteArray[[QOldIndex, POldIndex], i, :]
+                # swap D - Q
+                WriteArray[[QOldIndex, QnewIndex], i, :] = WriteArray[[QnewIndex, QOldIndex], i, :] 
             else:
                 # swap P
                 WriteArray[[PnewIndex, POldIndex], i, :] = WriteArray[[POldIndex, PnewIndex], i, :]
@@ -154,6 +162,12 @@ class RAID6:
             WriteArray[[PnewIndex, QOldIndex], :, :] = WriteArray[[QOldIndex, PnewIndex], :, :]
             # swap P - Q
             WriteArray[[POldIndex, QOldIndex], :, :] = WriteArray[[QOldIndex, POldIndex], :, :] 
+        #QDDDDP
+        elif StripIndex % self.N == self.N - 1:
+            # swap P and D
+            WriteArray[[POldIndex, QOldIndex], :, :] = WriteArray[[QOldIndex, POldIndex], :, :]
+            # swap D - Q
+            WriteArray[[QOldIndex, QnewIndex], :, :] = WriteArray[[QnewIndex, QOldIndex], :, :] 
         else:
             # swap P
             #print("WriteArray ",WriteArray)
@@ -469,12 +483,10 @@ class RAID6:
         for x in StripeIndexList:
             PIndex = ((self.N - 1 - x) % self.N - 1) % self.N
             QIndex = (self.N - 1 - x) % self.N
-            DiskIndex = np.random.randint(0, self.N - 2)
+            DiskIndex = np.random.randint(0, self.N)
             while DiskIndex == PIndex or DiskIndex == QIndex:
-                DiskIndex = np.random.randint(0, self.N - 2)
+                DiskIndex = np.random.randint(0, self.N)
             DiskIndexList.append(DiskIndex)
-        print(StripeIndexList)
-        print(DiskIndexList)
 
         NewDataArray = [''.join([random.choice(string.ascii_letters) for i in range(self.bsize)]) for j in range(self.MaxStripeIndex * self.N)]
         return [DiskIndexList, StripeIndexList, NewDataArray]
