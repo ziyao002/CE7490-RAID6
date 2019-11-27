@@ -1,6 +1,7 @@
 import time
 import raid4
 import raid5
+import raid6
 from utils import *
 from configure import *
 
@@ -9,7 +10,7 @@ if __name__ == '__main__':
 
     # generate random file
     GenRndFile(TestFileName, DataSize)
-    ### test Raid6 system
+    # test Raid6 system
     Raid6 = raid6.RAID6(TestFileName, DiskNumber, DataSize, BlockSize)
     RndIndexDataForRaid6 = Raid6.GenRndIndexData()
 
@@ -19,20 +20,21 @@ if __name__ == '__main__':
     SeqWriteStopTime = time.time()
     print("RAID6 sequential writing duration = ", SeqWriteStopTime - SeqWriteStartTime, "second")
     # test for RAID6 random writing
-    # RndReadStartTime = time.time()
-    # Raid6.RandomWrite(RndIndexDataForRaid6[0], RndIndexDataForRaid6[1], RndIndexDataForRaid6[2])
-    # RndReadStopTime = time.time()
-    # print("RAID6 random writing duration = ", RndReadStopTime - RndReadStartTime, "second")
+    RndReadStartTime = time.time()
+    Raid6.RandomWrite(RndIndexDataForRaid6[0], RndIndexDataForRaid6[1], RndIndexDataForRaid6[2])
+    RndReadStopTime = time.time()
+    print("RAID6 random writing duration = ", RndReadStopTime - RndReadStartTime, "second")
     # test for RAID6 reading
     ReadStartTime = time.time()
     Raid6.read()
     ReadStopTime = time.time()
-    print("RAID46reading duration = ", ReadStopTime - ReadStartTime, "second")
-
+    print("RAID6 reading duration = ", ReadStopTime - ReadStartTime, "second")
     # Recover for 2 Data Disks
-    ErrorDiskList = [5,6]
+    RebuildStartTime = time.time()
+    ErrorDiskList = [2, 3]
     Raid6.RAID6rebuild(ErrorDiskList)
-
+    RebuildStopTime = time.time()
+    print("RAID6 rebuilding duration = ", RebuildStopTime - RebuildStartTime, "second", '\n')
 
     Raid4 = raid4.RAID4(TestFileName, DiskNumber, DataSize, BlockSize)
     Raid5 = raid5.RAID5(TestFileName, DiskNumber, DataSize, BlockSize)
