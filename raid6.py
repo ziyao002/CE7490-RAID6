@@ -26,7 +26,8 @@ class RAID6:
         self.CountNum = 0
         self.F = FField(8)
         # Q coefficient, if DiskNumber = 8, coefficient is: 1,2,4,8,16,32,64,128
-        self.Q_coef = np.array([pow(2,i) for i in range(DiskNumber-2)])
+        # self.Q_coef = np.array([pow(2,i) for i in range(DiskNumber-2)])
+        self.Q_coef = np.array(iLogTable[:self.N-2])
 
     def Content2ArrayBlock(self, content):
         # return ContentArray(DiskIndex, BlockIndex, DataIndex)
@@ -60,26 +61,26 @@ class RAID6:
             case 4: Q D D D D P
         '''
         # need to consider the case the DiskIndex is swapped with P or Q disk drive during writing
-        POldIndex = ParityDiskIndex_RAID6
-        QOldIndex = ParityDiskIndex_RAID4
+        # POldIndex = ParityDiskIndex_RAID6
+        # QOldIndex = ParityDiskIndex_RAID4
 
-        QCoef_index = int()
-        # get Qcoef
-        # if disk detect at Old P disk
-        if DiskIndex == POldIndex:
-            if BlockIndex%self.N == self.N - 1:
-                QCoef_index = QDiskIndex
-            else:
-                QCoef_index = PDiskIndex
-        # if disk detect at old Q disk
-        elif DiskIndex == QOldIndex:
-            if BlockIndex%self.N == 1:
-                QCoef_index = PDiskIndex
-            else:
-                QCoef_index = QDiskIndex
-        else:
-            QCoef_index = DiskIndex
-
+        # QCoef_index = int()
+        # # get Qcoef
+        # # if disk detect at Old P disk
+        # if DiskIndex == POldIndex:
+        #     if BlockIndex%self.N == self.N - 1:
+        #         QCoef_index = QDiskIndex
+        #     else:
+        #         QCoef_index = PDiskIndex
+        # # if disk detect at old Q disk
+        # elif DiskIndex == QOldIndex:
+        #     if BlockIndex%self.N == 1:
+        #         QCoef_index = PDiskIndex
+        #     else:
+        #         QCoef_index = QDiskIndex
+        # else:
+        #     QCoef_index = DiskIndex
+        QCoef_index = self.GetOriginalDiskIndex(BlockIndex, DiskIndex)
         # print("QCoef_index = ",QCoef_index, "DiskIndex ", DiskIndex, "PDiskIndex ", PDiskIndex, "QDiskIndex ", QDiskIndex, "stripe ",BlockIndex)
         NewQByte = [np.bitwise_xor(np.bitwise_xor(self.F.Multiply(self.Q_coef[QCoef_index],NewDataByte[i]),self.F.Multiply(self.Q_coef[QCoef_index],OldDataByte[i])), OldQByte[i]) for i in range(self.bsize)]
         return NewQByte
@@ -182,9 +183,7 @@ class RAID6:
         PArray = self.GenXor(ContentArray)
         QArray = self.GetQArray(ContentArray)
         ConcArray = np.concatenate([ContentArray, PArray, QArray])
-        # print("ConcArray = ",ConcArray[:,2,:])
         WriteArray = self.SwapParity(ConcArray)
-        # print("WriteArray = ",WriteArray[:,2,:])
         #ReturnWriteArray = self.RecoverParity(WriteArray)
         #print("ReturnWriteArray = ",ReturnWriteArray)   
         return WriteArray
@@ -345,6 +344,27 @@ class RAID6:
         if np.count_nonzero(CheckArray_P) != 0 or np.count_nonzero(CheckArray_Q) != 0:
             raise Exception("RAID6 Check Fails!")
 
+    def GetOriginalDiskIndex(self, StripIndex, DiskIndex):
+        POldIndex = ParityDiskIndex_RAID6
+        PnewIndex = ((self.N - 1 - StripIndex) % self.N - 1) % self.N
+        QOldIndex = ParityDiskIndex_RAID4
+        QnewIndex = (self.N - 1 - StripIndex) % self.N
+        # if data disk locate at old P/Q diskindex, means they were swapped, need to get their original index
+        OriginalDiskIndex = int()
+        if DiskIndex == POldIndex:
+            if StripIndex % self.N == self.N - 1:
+                OriginalDiskIndex = QnewIndex
+            else:
+                OriginalDiskIndex = PnewIndex
+        elif DiskIndex == QOldIndex:
+            if StripIndex % self.N == 1:
+                OriginalDiskIndex = PnewIndex
+            else:
+                OriginalDiskIndex = QnewIndex
+        else:
+            OriginalDiskIndex = DiskIndex
+        return OriginalDiskIndex
+
     def RAID6rebuild(self, ErrorDiskList):
         # array written to file
         ByteArray = self.ParallelRead()
@@ -368,7 +388,9 @@ class RAID6:
         # for i in range(self.MaxStripeIndex):
         for i in range(self.MaxStripeIndex):
             # case 1: rebuild P, Q disk
-            if RebuildStripeArray[i][0] == 1 and RebuildStripeArray[i][1] == 2:
+            # if RebuildStripeArray[i][0] == 1 and RebuildStripeArray[i][1] == 2:
+            # P and Q drive
+            if (RebuildStripeArray[i][0] + RebuildStripeArray[i][1]) == 3:
                 # P_old = ByteArray[ErrorDiskList[0]][i]
                 # Q_old = ByteArray[ErrorDiskList[1]][i]
                 # get data strip and reshape to 3 dimension in order to pass to GenXor and GetQArray function
@@ -382,59 +404,53 @@ class RAID6:
                 RebuildArray[1][i] = QArray.reshape(self.bsize)
                 # print("i is ",i,"RebuildArray[0][i]",RebuildArray[0][i],"RebuildArray[1][i]",RebuildArray[1][i])
             # case 2: Single data drive and Q drive
-            if RebuildStripeArray[i][0] == 0 and RebuildStripeArray[i][1] == 2:
+            # if RebuildStripeArray[i][0] == 0 and RebuildStripeArray[i][1] == 2:
+            if (RebuildStripeArray[i][0] + RebuildStripeArray[i][1]) == 2:
+                Dindex = RebuildStripeArray[i].tolist().index(0)
+                Qindex = RebuildStripeArray[i].tolist().index(2)
+                Original_Dindex = self.GetOriginalDiskIndex(i,ErrorDiskList[Dindex])
                 DataStrip = ByteArray[:,i,:].reshape(self.N,1,self.bsize)
                 RecoveredStrip = self.RecoverParityStrip(DataStrip,i) # RecoveredStrip shape (10, 1, 4)
                 # remove data disk and Q disk
-                Strip_No_DQ = np.delete(RecoveredStrip,[ErrorDiskList[0],self.N-1],axis=0)
+                Strip_No_DQ = np.delete(RecoveredStrip,[Original_Dindex,self.N-1],axis=0)
                 # gen new Data array
                 New_DArray = self.GenXor(Strip_No_DQ)
                 # replace error data disk with recovered data
-                RecoveredStrip[ErrorDiskList[0]] = New_DArray.reshape(self.bsize)
+                RecoveredStrip[Original_Dindex] = New_DArray.reshape(self.bsize)
                 New_QArray = self.GetQArray_withcoef(RecoveredStrip[:-2],self.Q_coef)
-                RebuildArray[0][i] = New_DArray.reshape(self.bsize)
-                RebuildArray[1][i] = New_QArray.reshape(self.bsize)
+                RebuildArray[Dindex][i] = New_DArray.reshape(self.bsize)
+                RebuildArray[Qindex][i] = New_QArray.reshape(self.bsize)
                 # print("i is ",i,"RebuildArray[0][i]",RebuildArray[0][i],"RebuildArray[1][i]",RebuildArray[1][i])
             # case 3: Single data drive and P drive    
-            if RebuildStripeArray[i][0] == 0 and RebuildStripeArray[i][1] == 1:  
+            if (RebuildStripeArray[i][0] + RebuildStripeArray[i][1]) == 1:
+                Dindex = RebuildStripeArray[i].tolist().index(0)
+                Pindex = RebuildStripeArray[i].tolist().index(1)
+                Original_Dindex = self.GetOriginalDiskIndex(i,ErrorDiskList[Dindex])
+                # print("Original_Dindex = ",Original_Dindex,"Dindex = ",ErrorDiskList[Dindex])
                 DataStrip = ByteArray[:,i,:].reshape(self.N,1,self.bsize)
                 RecoveredStrip = self.RecoverParityStrip(DataStrip,i) # RecoveredStrip shape (10, 1, 4)
-                DataStrip_noD = np.delete(RecoveredStrip,ErrorDiskList[0],axis=0)
-                new_coef = np.delete(self.Q_coef,ErrorDiskList[0],axis=0)
+                DataStrip_noD = np.delete(RecoveredStrip,Original_Dindex,axis=0)
+                new_coef = np.delete(self.Q_coef,Original_Dindex,axis=0)
                 Q_prime = self.GetQArray_withcoef(DataStrip_noD[:-2],new_coef).reshape(self.bsize)
                 # Q XOR Q_prime
                 New_DArray = np.bitwise_xor(Q_prime,RecoveredStrip[-1]).reshape(self.bsize)
                 # inverse coefficient
-                G_inv = self.F.DoInverseForSmallField(self.Q_coef[ErrorDiskList[0]])
+                G_inv = self.F.DoInverseForSmallField(self.Q_coef[Original_Dindex])
                 for j in range(self.bsize):
                     New_DArray[j] = self.F.Multiply(G_inv,New_DArray[j])
-                RecoveredStrip[ErrorDiskList[0]] = New_DArray
+                RecoveredStrip[Original_Dindex] = New_DArray
                 New_PArray = self.GenXor(RecoveredStrip[:-2]).reshape(1,self.bsize)
-                RebuildArray[0][i] = New_DArray
-                RebuildArray[1][i] = New_PArray 
+                RebuildArray[Dindex][i] = New_DArray
+                RebuildArray[Pindex][i] = New_PArray
                 # print("i is ",i,"RebuildArray[0][i]",RebuildArray[0][i],"RebuildArray[1][i]",RebuildArray[1][i])
             # case 4: 2 data array failed              
-            if RebuildStripeArray[i][0] == 0 and RebuildStripeArray[i][1] == 0:  
-                # print("i is ",i)
+            # if RebuildStripeArray[i][0] == 0 and RebuildStripeArray[i][1] == 0:
+            if (RebuildStripeArray[i][0] + RebuildStripeArray[i][1]) == 0:
                 DataStrip = ByteArray[:,i,:].reshape(self.N,1,self.bsize)
                 # put P,Q disk to end of disk
                 RecoveredStrip = self.RecoverParityStrip(DataStrip,i) # RecoveredStrip shape (10, 1, 4)
-                POldIndex = ParityDiskIndex_RAID6
-                PnewIndex = ((self.N - 1 - i) % self.N - 1) % self.N
-                QOldIndex = ParityDiskIndex_RAID4
-                QnewIndex = (self.N - 1 - i) % self.N   
-                # if data disk locate at old P/Q diskindex, means they were swapped, need to get their original index
-                DataDisk1_index = ErrorDiskList[0]
-                DataDisk2_index = ErrorDiskList[1]
-                if ErrorDiskList[0] == POldIndex:
-                    DataDisk1_index = PnewIndex
-                if ErrorDiskList[0] == QOldIndex:
-                    DataDisk1_index = QnewIndex
-                if ErrorDiskList[1] == POldIndex:
-                    DataDisk2_index = PnewIndex
-                if ErrorDiskList[1] == QOldIndex:
-                    DataDisk2_index = QnewIndex    
-                # print("Q_coef[DataDisk1_index] = ",self.Q_coef[DataDisk1_index],"Q_coef[DataDisk2_index] = ",self.Q_coef[DataDisk2_index])
+                DataDisk1_index = self.GetOriginalDiskIndex(i,ErrorDiskList[0])
+                DataDisk2_index = self.GetOriginalDiskIndex(i,ErrorDiskList[1])
                 G1_G2_inv = self.F.DoInverseForSmallField(self.F.Add(self.Q_coef[DataDisk1_index],self.Q_coef[DataDisk2_index]))
                 # remove 2 data disk
                 Strip_No_DD = np.delete(RecoveredStrip,[DataDisk1_index,DataDisk2_index],axis=0)
@@ -463,7 +479,7 @@ class RAID6:
                 RebuildArray[1][i] = New_D2Array 
                 # print("i is ",i,"RebuildArray[0][i]",RebuildArray[0][i],"RebuildArray[1][i]",RebuildArray[1][i])
         # re build array
-        # print(RebuildArray)
+        # print("Rebuild Array = ", RebuildArray)
         for strip in range(self.MaxStripeIndex):
             self.SeqWrite2Disk(self.GetPath(ErrorDiskList[0], strip), RebuildArray[0][strip], ErrorDiskList[0])
             self.SeqWrite2Disk(self.GetPath(ErrorDiskList[1], strip), RebuildArray[1][strip], ErrorDiskList[1])
